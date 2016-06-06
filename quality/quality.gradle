@@ -1,0 +1,72 @@
+apply plugin: 'checkstyle'
+apply plugin: 'findbugs'
+apply plugin: 'pmd'
+
+task checkstyle(type: Checkstyle) {
+  configFile file("${project.rootDir}/quality/checkstyle/checkstyle.xml")
+  configProperties = ['checkstyle.cache.file'     : rootProject.file('build/checkstyle.cache'),
+                      'checkstyleSuppressionsPath': file(
+                          "${project.rootDir}/quality/checkstyle/suppressions.xml").absolutePath]
+  source 'src'
+  include '**/*.java'
+  exclude '**/gen/**'
+  classpath = files()
+}
+
+task findbugs(type: FindBugs) {
+  ignoreFailures = false
+  effort = "max"
+  reportLevel = "high"
+  excludeFilter = new File("${project.rootDir}/quality/findbugs/findbugs-filter.xml")
+  classes = fileTree('build/intermediates/classes/')
+
+  source 'src'
+  include '**/*.java'
+  exclude '**/gen/**'
+
+  reports {
+    xml.enabled = false
+    html.enabled = true
+    xml {
+      destination "$project.buildDir/reports/findbugs/findbugs.xml"
+    }
+    html {
+      destination "$project.buildDir/reports/findbugs/findbugs.html"
+    }
+  }
+
+  classpath = files()
+}
+
+task pmd(type: Pmd) {
+  ignoreFailures = false
+  ruleSetFiles = files("${project.rootDir}/quality/pmd/pmd-ruleset.xml")
+  ruleSets = []
+
+  source 'src'
+  include '**/*.java'
+  exclude '**/gen/**'
+
+  reports {
+    xml.enabled = false
+    html.enabled = true
+    xml {
+      destination "$project.buildDir/reports/pmd/pmd.xml"
+    }
+    html {
+      destination "$project.buildDir/reports/pmd/pmd.html"
+    }
+  }
+}
+
+check.doLast {
+  project.tasks.getByName("checkstyle").execute()
+  project.tasks.getByName("findbugs").execute()
+  project.tasks.getByName("pmd").execute()
+  project.tasks.getByName("lint").execute()
+}
+
+
+checkstyle {
+  toolVersion '6.17' // set Checkstyle version here
+}

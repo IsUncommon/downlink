@@ -1,6 +1,8 @@
 package uncmn.downlink.sample;
 
+import android.content.ActivityNotFoundException;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.os.Handler;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.RecyclerView;
@@ -205,37 +207,90 @@ public class DownloadsAdapter extends RecyclerView.Adapter<DownloadsAdapter.Down
         setupClickAsDownload(item);
       } else if (item.status().isCompleted()) {
         downloadStatus.setText(R.string.download_completed);
-        setupClickAsOpen();
+        setupClickAsOpen(item);
       } else if (item.status().isFailed()) {
         downloadStatus.setText(R.string.download_failed);
-        setupClickAsRedownload();
+        setupClickAsRedownload(item);
       } else if (item.status().isQueued()) {
         downloadStatus.setText(R.string.download_queued);
         progressBar.setVisibility(View.VISIBLE);
         progressBar.setIndeterminate(true);
+        setupClickAsCancel(item);
       } else if (item.status().isCanceled()) {
         downloadStatus.setText(R.string.download_canceled);
-        setupClickAsRedownload();
+        setupClickAsRedownload(item);
       } else if (item.status().isDownloadInProgress()) {
         downloadStatus.setText(R.string.download_progress);
         progressBar.setVisibility(View.VISIBLE);
         progressBar.setIndeterminate(false);
         int progress = (int) Math.round((double) item.size() * 100 / (double) item.totalSize());
         progressBar.setProgress(progress);
-        setupClickAsCancel();
+        setupClickAsCancel(item);
       }
     }
 
-    private void setupClickAsCancel() {
-
+    private void setupClickAsCancel(final DownloadableItem item) {
+      itemView.setOnClickListener(new View.OnClickListener() {
+        @Override public void onClick(View v) {
+          new AlertDialog.Builder(itemView.getContext()).setTitle(
+              itemView.getContext().getString(R.string.cancel_download) + item.name())
+              .setMessage(itemView.getContext().getString(R.string.cancel_message))
+              .setPositiveButton(itemView.getContext().getString(R.string.yes),
+                  new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) {
+                      Timber.d("Cancel item now..");
+                      itemView.setOnClickListener(null);
+                      downlink.cancelDownload(item.url());
+                    }
+                  })
+              .setNegativeButton(itemView.getContext().getString(R.string.no),
+                  new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) {
+                      Timber.d("Not needed to cancel item");
+                    }
+                  })
+              .show();
+        }
+      });
     }
 
-    private void setupClickAsRedownload() {
-
+    private void setupClickAsRedownload(final DownloadableItem item) {
+      setupClickAsDownload(item);
     }
 
-    private void setupClickAsOpen() {
-
+    private void setupClickAsOpen(final DownloadableItem item) {
+      itemView.setOnClickListener(new View.OnClickListener() {
+        @Override public void onClick(View v) {
+          new AlertDialog.Builder(itemView.getContext()).setTitle(
+              itemView.getContext().getString(R.string.open_item) + item.name())
+              .setMessage(itemView.getContext().getString(R.string.open_message))
+              .setPositiveButton(itemView.getContext().getString(R.string.yes),
+                  new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) {
+                      itemView.setOnClickListener(null);
+                      Intent intent = downlink.openIntent(itemView.getContext(),
+                          itemView.getContext().getString(R.string.downlink_authority), item.url());
+                      if (intent != null) {
+                        Timber.d("Intent to open is -- %s", intent);
+                        try {
+                          itemView.getContext().startActivity(intent);
+                        } catch (ActivityNotFoundException anfe) {
+                          Timber.e(anfe, "Could not find activity");
+                        }
+                      } else {
+                        Timber.d("Intent is null, cannot open");
+                      }
+                    }
+                  })
+              .setNegativeButton(itemView.getContext().getString(R.string.no),
+                  new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) {
+                      Timber.d("Not needed to open item");
+                    }
+                  })
+              .show();
+        }
+      });
     }
 
     private void setupClickAsDownload(final DownloadableItem item) {

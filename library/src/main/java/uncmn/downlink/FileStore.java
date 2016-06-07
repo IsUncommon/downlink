@@ -9,15 +9,15 @@ import java.io.IOException;
  * File storage class.
  */
 public final class FileStore {
-  //50 MB default size
-  private static final int DEFAULT_CACHE_SIZE_IN_BYTES = 50 * 1024 * 1024;
   private static final int CACHE_VERSION = 1;
 
-  private static final int DISK_CACHE_ENTRIES = 4;
+  private static final int DISK_CACHE_ENTRIES = 5;
+
   public static final int STATUS_INDEX = 0;
   public static final int CONTENT_TYPE_INDEX = 1;
   public static final int FILE_INDEX = 2;
-  public static final int META_INDEX = 3;
+  public static final int URL_INDEX = 3;
+  public static final int META_INDEX = 4;
 
   private final File cacheRootDir;
   private final long cacheSizeInBytes;

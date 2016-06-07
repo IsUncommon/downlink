@@ -26,7 +26,7 @@ public class MainApplication extends Application {
     });
   }
 
-  public Downlink getDownlink() {
+  public Downlink downlink() {
     return downlink;
   }
 }

@@ -31,7 +31,10 @@ public class MainActivity extends AppCompatActivity {
   private static final String[] URLS = new String[] {
       "https://dl.dropboxusercontent.com/u/62988391/downlink/7789f6f3985d5ab67bf32bd609ec7daa.png",
       "https://dl.dropboxusercontent.com/u/62988391/downlink/github-git-cheat-sheet.pdf",
-      "https://dl.dropboxusercontent.com/u/62988391/downlink/muzei.mp4"
+      "https://dl.dropboxusercontent.com/u/62988391/downlink/muzei.mp4",
+      "https://dl.dropboxusercontent.com/u/62988391/downlink/maven-metadata.xml",
+      "https://dl.dropboxusercontent.com/u/62988391/downlink/join.txt",
+      "https://services.github.com/kit/downloads/github-git-cheat-sheet.pdf"
   };
 
   @BindView(R.id.recycler) RecyclerView recyclerView;
@@ -46,7 +49,7 @@ public class MainActivity extends AppCompatActivity {
     setContentView(R.layout.activity_main);
     binder = ButterKnife.bind(this);
     MainApplication application = (MainApplication) getApplication();
-    downlink = application.getDownlink();
+    downlink = application.downlink();
     downlink.setLogger(new Logger() {
       @Override public void log(String message) {
         Timber.d(message);

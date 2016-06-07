@@ -10,6 +10,11 @@
   <string name="yes">YES</string>
   <string name="no">NO</string>
   <string name="download_suffix">"Download - "</string>
+  <string name="cancel_download">"Cancel Download - "</string>
   <string name="download_message">Should this item be downloaded now ?</string>
+  <string name="cancel_message">Cancel this download</string>
   <string name="settings">Settings</string>
+  <string name="open_item">Open</string>
+  <string name="open_message">would you like to open this file ?</string>
+  <string name="downlink_authority">uncmn.downlink.sample</string>
 </resources>

@@ -14,6 +14,9 @@ public final class DownloadStatus {
 
   private int status;
   private String message;
+  private String url;
+  private String contentType;
+  private String metaData;
 
   /**
    * Default constructor.
@@ -24,9 +27,12 @@ public final class DownloadStatus {
     this.status = status;
   }
 
-  DownloadStatus(int status, String message) {
+  DownloadStatus(int status, String message, String url, String contentType, String metaData) {
     this.status = status;
     this.message = message;
+    this.url = url;
+    this.contentType = contentType;
+    this.metaData = metaData;
   }
 
   /**
@@ -94,5 +100,38 @@ public final class DownloadStatus {
 
   public String message() {
     return message;
+  }
+
+  public String contentType() {
+    return contentType;
+  }
+
+  public String url() {
+    return url;
+  }
+
+  public String metaData() {
+    return metaData;
+  }
+
+  @Override public String toString() {
+    return "DownloadStatus{"
+        +
+        "status="
+        + status
+        + ", message='"
+        + message
+        + '\''
+        + ", url='"
+        + url
+        + '\''
+        + ", contentType='"
+        + contentType
+        + '\''
+        + ", metaData='"
+        + metaData
+        + '\''
+        +
+        '}';
   }
 }

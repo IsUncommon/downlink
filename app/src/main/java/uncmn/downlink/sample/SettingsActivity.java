@@ -36,7 +36,7 @@ public class SettingsActivity extends AppCompatActivity {
     });
     clearPanel.setOnClickListener(new View.OnClickListener() {
       @Override public void onClick(View v) {
-        application.getDownlink().clear();
+        application.downlink().clear();
         finish();
       }
     });
@@ -44,8 +44,8 @@ public class SettingsActivity extends AppCompatActivity {
 
   private void setSizes() {
     final MainApplication application = (MainApplication) getApplication();
-    size.setText(application.getDownlink().size() + " bytes");
-    maxSize.setText(application.getDownlink().maxSize() + " bytes");
+    size.setText(application.downlink().size() + " bytes");
+    maxSize.setText(application.downlink().maxSize() + " bytes");
   }
 
   @Override public boolean onOptionsItemSelected(MenuItem item) {

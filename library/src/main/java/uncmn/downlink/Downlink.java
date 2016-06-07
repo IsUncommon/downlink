@@ -1,5 +1,9 @@
 package uncmn.downlink;
 
+import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.support.v4.content.FileProvider;
 import android.util.Log;
 import com.jakewharton.disklrucache.DiskLruCache;
 import java.io.File;
@@ -26,6 +30,7 @@ import okio.Okio;
  * Download manager.
  */
 public final class Downlink {
+  protected static final String UNCMN_DOWNLINK = "uncmn-downlink";
   private final long maxSizeInBytes;
   private Logger logger = new Logger() {
     @Override public void log(String message) {
@@ -127,11 +132,11 @@ public final class Downlink {
   }
 
   /**
-   * @param url Url value.
+   * @param key File key.
    * @return Download Status object representing the download state of the url.
    */
-  public DownloadStatus downloadStatus(String url) {
-    String key = Util.hashKey(url);
+
+  DownloadStatus status(String key) {
     DiskLruCache.Snapshot snapshot = null;
     try {
       snapshot = fileStore.getDiskLruCache().get(key);
@@ -141,13 +146,31 @@ public final class Downlink {
         int status = source.readInt();
         source.close();
         DownloadStatus downloadStatus = new DownloadStatus(status);
+        String message = "";
         if (downloadStatus.isFailed()) {
           source = Okio.buffer(Okio.source(snapshot.getInputStream(FileStore.FILE_INDEX)));
-          String message = source.readUtf8LineStrict();
+          message = source.readUtf8();
           source.close();
-          downloadStatus = new DownloadStatus(status, message);
         }
+
+        String urlString = "";
+        source = Okio.buffer(Okio.source(snapshot.getInputStream(FileStore.URL_INDEX)));
+        urlString = source.readUtf8();
+        source.close();
+
+        String contentType = "";
+        source = Okio.buffer(Okio.source(snapshot.getInputStream(FileStore.CONTENT_TYPE_INDEX)));
+        contentType = source.readUtf8();
+        source.close();
+
+        String metaData = "";
+        source = Okio.buffer(Okio.source(snapshot.getInputStream(FileStore.META_INDEX)));
+        metaData = source.readUtf8();
+        source.close();
+
         snapshot.close();
+
+        downloadStatus = new DownloadStatus(status, message, urlString, contentType, metaData);
         return downloadStatus;
       }
     } catch (IOException e) {
@@ -158,6 +181,15 @@ public final class Downlink {
       }
     }
     return DownloadStatus.notAvailable();
+  }
+
+  /**
+   * @param url Url value.
+   * @return Download Status object representing the download state of the url.
+   */
+  public DownloadStatus downloadStatus(String url) {
+    String key = Util.hashKey(url);
+    return status(key);
   }
 
   /**
@@ -189,7 +221,7 @@ public final class Downlink {
           final DownloadWorker worker =
               new DownloadWorker(key, httpClient, url, fileStore, internalDownlinkListener);
           workerMap.put(key, worker);
-          createQueueEntry(key);
+          createQueueEntry(key, url);
           executorService.submit(new Runnable() {
             @Override public void run() {
               try {
@@ -208,7 +240,7 @@ public final class Downlink {
     });
   }
 
-  private void createQueueEntry(String fileKey) {
+  private void createQueueEntry(String fileKey, String url) {
     try {
       DiskLruCache.Editor editor = fileStore.getDiskLruCache().edit(fileKey);
       //lets add status first
@@ -226,6 +258,11 @@ public final class Downlink {
 
       bufferedStatusSink = Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.FILE_INDEX)));
       bufferedStatusSink.writeUtf8("");
+      bufferedStatusSink.flush();
+      bufferedStatusSink.close();
+
+      bufferedStatusSink = Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.URL_INDEX)));
+      bufferedStatusSink.writeUtf8(url);
       bufferedStatusSink.flush();
       bufferedStatusSink.close();
 
@@ -290,6 +327,30 @@ public final class Downlink {
   }
 
   /**
+   * Provide an open intent for url.
+   * IO operation is involved.
+   *
+   * @param context UI context.
+   * @param url url to open.
+   * @param authority Authority of the {@linkplain DownlinkProvider}
+   * @return File open intent if download is completed, else null.
+   */
+  public Intent openIntent(Context context, String authority, String url) {
+    Intent intent = null;
+    DownloadStatus downloadStatus = downloadStatus(url);
+    if (downloadStatus.isCompleted()) {
+      String fileKey = Util.hashKey(url);
+      File downloadDirectory = downloadDirectory();
+      File file = new File(downloadDirectory, fileKey + "." + FileStore.FILE_INDEX);
+      Uri contentUri = FileProvider.getUriForFile(context, authority, file);
+      intent = new Intent(Intent.ACTION_VIEW);
+      intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+      intent.setDataAndType(contentUri, downloadStatus.contentType());
+    }
+    return intent;
+  }
+
+  /**
    * Cancel existing downloads and clear all the content.
    */
   public void clear() {
@@ -303,6 +364,22 @@ public final class Downlink {
     } catch (IOException e) {
       logger.log("Failed clearing downlink -- " + Log.getStackTraceString(e));
     }
+  }
+
+  /**
+   * Get hold of logger.
+   *
+   * @return logger instance of downlink.
+   */
+  Logger logger() {
+    return logger;
+  }
+
+  /**
+   * @return Download directory file.
+   */
+  File downloadDirectory() {
+    return rootDir;
   }
 
   /**
@@ -345,7 +422,6 @@ public final class Downlink {
         this.cancelDownload = true;
         if (call != null && !call.isCanceled()) {
           call.cancel();
-          listener.onCanceled(downloadUrl);
         }
       }
     }
@@ -356,9 +432,10 @@ public final class Downlink {
     public void download() {
       Request request = new Request.Builder().url(downloadUrl).build();
       DiskLruCache lruCache = fileStore.getDiskLruCache();
+      DiskLruCache.Editor editor = null;
       Exception failedException = null;
       try {
-        DiskLruCache.Editor editor = lruCache.edit(fileKey);
+        editor = lruCache.edit(fileKey);
         addStatus(editor);
         editor.commit();
         call = client.newCall(request);
@@ -371,12 +448,12 @@ public final class Downlink {
           editor = lruCache.edit(fileKey);
           BufferedSink bufferedcontentTypeSink =
               Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.CONTENT_TYPE_INDEX)));
-          bufferedcontentTypeSink.writeUtf8(response.body().contentType().type());
+          bufferedcontentTypeSink.writeUtf8(
+              response.header("Content-Type", "application/octect-stream"));
           bufferedcontentTypeSink.flush();
           bufferedcontentTypeSink.close();
           editor.commit();
           //---
-
           editor = lruCache.edit(fileKey);
           //lets add the file
           final long totalSize = response.body().contentLength();
@@ -395,15 +472,29 @@ public final class Downlink {
           BufferedSink bufferedFileSink =
               Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.FILE_INDEX)));
           bufferedFileSink.writeAll(bufferedFileSource);
+          bufferedFileSink.flush();
           bufferedFileSource.close();
           editor.commit();
         }
       } catch (IOException e) {
         failedException = new Exception(Log.getStackTraceString(e));
+      } finally {
+        try {
+          DiskLruCache.Editor temp = lruCache.edit(fileKey);
+          if (editor != null) {
+            if (temp == null) {
+              editor.commit();
+            } else {
+              temp.abortUnlessCommitted();
+            }
+          }
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
       }
       if (failedException != null) {
         try {
-          DiskLruCache.Editor editor = lruCache.edit(fileKey);
+          editor = lruCache.edit(fileKey);
           //set failed state in the entry
           BufferedSink bufferedStatusSink =
               Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.STATUS_INDEX)));
@@ -417,14 +508,18 @@ public final class Downlink {
           BufferedSink bufferedFileSink =
               Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.FILE_INDEX)));
           bufferedFileSink.writeUtf8(failedException.getMessage());
+          bufferedFileSink.flush();
           bufferedFileSink.close();
           editor.commit();
-          listener.onFailure(downloadUrl, failedException);
+          if (cancelDownload) {
+            listener.onCanceled(downloadUrl);
+          } else {
+            listener.onFailure(downloadUrl, failedException);
+          }
         } catch (IOException e) {
           e.printStackTrace();
         }
       } else {
-        DiskLruCache.Editor editor = null;
         try {
           editor = lruCache.edit(fileKey);
           //set failed state in the entry

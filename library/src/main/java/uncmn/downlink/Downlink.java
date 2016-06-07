@@ -184,6 +184,13 @@ public final class Downlink {
   }
 
   /**
+   * @return Ok http client.
+   */
+  public OkHttpClient httpClient() {
+    return httpClient;
+  }
+
+  /**
    * @param url Url value.
    * @return Download Status object representing the download state of the url.
    */

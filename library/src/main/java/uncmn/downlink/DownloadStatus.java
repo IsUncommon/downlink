@@ -9,6 +9,8 @@ public final class DownloadStatus {
   public static final int STATUS_FAILED = 2;
   public static final int STATUS_DOWNLOAD_IN_PROGRESS = 3;
   public static final int STATUS_NOT_AVAILABLE = 4;
+  public static final int STATUS_QUEUED = 5;
+  public static final int STATUS_CANCELED = 6;
 
   private int status;
   private String message;
@@ -42,14 +44,52 @@ public final class DownloadStatus {
   }
 
   /**
+   * @return whether status is download in progress.
+   */
+  public boolean isDownloadInProgress() {
+    return status == STATUS_DOWNLOAD_IN_PROGRESS;
+  }
+
+  /**
    * @return Whether download is available.
    */
   public boolean isNotAvailable() {
     return status == STATUS_NOT_AVAILABLE;
   }
 
+  /**
+   * @return Whether download is queued.
+   */
+  public boolean isQueued() {
+    return status == STATUS_QUEUED;
+  }
+
+  public boolean isCanceled() {
+    return status == STATUS_CANCELED;
+  }
+
   public static DownloadStatus notAvailable() {
     return new DownloadStatus(STATUS_NOT_AVAILABLE);
+  }
+
+  public static DownloadStatus queued() {
+    return new DownloadStatus(STATUS_QUEUED);
+  }
+
+  public static DownloadStatus completed() {
+    return new DownloadStatus(STATUS_COMPLETED);
+  }
+
+  public static DownloadStatus failed() {
+    return new DownloadStatus(STATUS_FAILED);
+  }
+
+  public static DownloadStatus canceled() {
+    return new DownloadStatus(STATUS_CANCELED);
+  }
+
+  public static DownloadStatus inProgress() {
+    return new DownloadStatus(STATUS_DOWNLOAD_IN_PROGRESS);
   }
 
   public String message() {

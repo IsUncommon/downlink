@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -25,7 +26,7 @@ import okio.Okio;
  * Download manager.
  */
 public final class Downlink {
-  private static final int DEFAULT_CACHE_SIZE_IN_BYTES = 250 * 1024 * 1024;
+  private final long maxSizeInBytes;
   private Logger logger = new Logger() {
     @Override public void log(String message) {
       //do nothing
@@ -33,9 +34,9 @@ public final class Downlink {
   };
   private final File rootDir;
   private FileStore fileStore;
-  private long cacheSizeInBytes = DEFAULT_CACHE_SIZE_IN_BYTES;
   private ConcurrentHashMap<String, DownloadWorker> workerMap = new ConcurrentHashMap<>();
   private ExecutorService executorService = Executors.newSingleThreadExecutor();
+  private ExecutorService submissionService = Executors.newSingleThreadExecutor();
   private OkHttpClient httpClient;
   private HashMap<String, List<DownlinkListener>> listenerMap = new HashMap<>();
   private DownlinkListener internalDownlinkListener = new DownlinkListener() {
@@ -89,8 +90,9 @@ public final class Downlink {
   /**
    * @param rootDir Root directory at which cache entries should be saved.
    */
-  private Downlink(String rootDir) {
+  private Downlink(String rootDir, long maxSizeInBytes) {
     this.rootDir = new File(rootDir);
+    this.maxSizeInBytes = maxSizeInBytes;
     init();
   }
 
@@ -106,7 +108,7 @@ public final class Downlink {
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
         .build();
-    this.fileStore = new FileStore(rootDir, cacheSizeInBytes);
+    this.fileStore = new FileStore(rootDir, maxSizeInBytes);
   }
 
   public void setLogger(Logger logger) {
@@ -116,10 +118,11 @@ public final class Downlink {
 
   /**
    * @param rootDir Directory to which downloads will happen.
+   * @param maxSizeInBytes Maximum size to occupy in disk in bytes.
    * @return Downlink instance.
    */
-  public static Downlink create(String rootDir) {
-    Downlink downlink = new Downlink(rootDir);
+  public static Downlink create(String rootDir, long maxSizeInBytes) {
+    Downlink downlink = new Downlink(rootDir, maxSizeInBytes);
     return downlink;
   }
 
@@ -174,28 +177,66 @@ public final class Downlink {
 
   /**
    * Queue a download if one does not already exists.
+   * Note: this call is asynchronous.
    *
    * @param url Download url.
    */
-  public void queue(String url) {
-    final String key = Util.hashKey(url);
-    if (!workerMap.containsKey(key)) {
-      final DownloadWorker worker =
-          new DownloadWorker(key, httpClient, url, fileStore, internalDownlinkListener);
-      workerMap.put(key, worker);
-      executorService.submit(new Runnable() {
-        @Override public void run() {
-          try {
-            worker.download();
-          } catch (Exception e) {
-            logger.log("Exception occurred -- " + Log.getStackTraceString(e));
-          }
-          workerMap.remove(key);
+  public void queue(final String url) {
+    submissionService.submit(new Runnable() {
+      @Override public void run() {
+        final String key = Util.hashKey(url);
+        if (!workerMap.containsKey(key)) {
+          final DownloadWorker worker =
+              new DownloadWorker(key, httpClient, url, fileStore, internalDownlinkListener);
+          workerMap.put(key, worker);
+          createQueueEntry(key);
+          executorService.submit(new Runnable() {
+            @Override public void run() {
+              try {
+                worker.download();
+              } catch (Exception e) {
+                logger.log("Exception occurred -- " + Log.getStackTraceString(e));
+              }
+              workerMap.remove(key);
+            }
+          });
+          internalDownlinkListener.onQueued(url);
+        } else {
+          logger.log("Already contains an executorService for url -- " + url);
         }
-      });
-      internalDownlinkListener.onQueued(url);
-    } else {
-      logger.log("Already contains an executorService for url -- " + url);
+      }
+    });
+  }
+
+  private void createQueueEntry(String fileKey) {
+    try {
+      DiskLruCache.Editor editor = fileStore.getDiskLruCache().edit(fileKey);
+      //lets add status first
+      BufferedSink bufferedStatusSink =
+          Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.STATUS_INDEX)));
+      bufferedStatusSink.writeInt(DownloadStatus.STATUS_QUEUED);
+      bufferedStatusSink.flush();
+      bufferedStatusSink.close();
+
+      bufferedStatusSink =
+          Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.CONTENT_TYPE_INDEX)));
+      bufferedStatusSink.writeUtf8("");
+      bufferedStatusSink.flush();
+      bufferedStatusSink.close();
+
+      bufferedStatusSink = Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.FILE_INDEX)));
+      bufferedStatusSink.writeUtf8("");
+      bufferedStatusSink.flush();
+      bufferedStatusSink.close();
+
+      bufferedStatusSink = Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.META_INDEX)));
+      bufferedStatusSink.writeUtf8("");
+      bufferedStatusSink.flush();
+      bufferedStatusSink.close();
+
+      editor.commit();
+    } catch (IOException e) {
+      logger.log("Exception occurred -- " + Log.getStackTraceString(e));
     }
   }
 
@@ -224,6 +265,43 @@ public final class Downlink {
   public void removeListener(String url, DownlinkListener downlinkListener) {
     if (listenerMap.containsKey(url)) {
       listenerMap.get(url).remove(downlinkListener);
+    }
+  }
+
+  /**
+   * @return Currently occupied size in bytes.
+   */
+  public long size() {
+    return fileStore.getDiskLruCache().size();
+  }
+
+  /**
+   * @return Maximum size that can be occupied in bytes.
+   */
+  public long maxSize() {
+    return fileStore.getDiskLruCache().getMaxSize();
+  }
+
+  /**
+   * Reset max cache size in bytes.
+   */
+  public void resetMaxSize(long sizeInBytes) {
+    fileStore.getDiskLruCache().setMaxSize(sizeInBytes);
+  }
+
+  /**
+   * Cancel existing downloads and clear all the content.
+   */
+  public void clear() {
+    for (Map.Entry<String, DownloadWorker> entry : workerMap.entrySet()) {
+      entry.getValue().cancelDownload();
+    }
+    try {
+      fileStore.getDiskLruCache().delete();
+      //create a new cache
+      this.fileStore = new FileStore(rootDir, maxSizeInBytes);
+    } catch (IOException e) {
+      logger.log("Failed clearing downlink -- " + Log.getStackTraceString(e));
     }
   }
 
@@ -282,6 +360,7 @@ public final class Downlink {
       try {
         DiskLruCache.Editor editor = lruCache.edit(fileKey);
         addStatus(editor);
+        editor.commit();
         call = client.newCall(request);
         Response response = call.execute();
         if (!response.isSuccessful()) {
@@ -328,7 +407,8 @@ public final class Downlink {
           //set failed state in the entry
           BufferedSink bufferedStatusSink =
               Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.STATUS_INDEX)));
-          bufferedStatusSink.writeInt(DownloadStatus.STATUS_FAILED);
+          bufferedStatusSink.writeInt(
+              cancelDownload ? DownloadStatus.STATUS_CANCELED : DownloadStatus.STATUS_FAILED);
           bufferedStatusSink.flush();
           bufferedStatusSink.close();
           editor.commit();
@@ -368,24 +448,6 @@ public final class Downlink {
       bufferedStatusSink.writeInt(DownloadStatus.STATUS_DOWNLOAD_IN_PROGRESS);
       bufferedStatusSink.flush();
       bufferedStatusSink.close();
-
-      bufferedStatusSink =
-          Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.CONTENT_TYPE_INDEX)));
-      bufferedStatusSink.writeUtf8("");
-      bufferedStatusSink.flush();
-      bufferedStatusSink.close();
-
-      bufferedStatusSink = Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.FILE_INDEX)));
-      bufferedStatusSink.writeUtf8("");
-      bufferedStatusSink.flush();
-      bufferedStatusSink.close();
-
-      bufferedStatusSink = Okio.buffer(Okio.sink(editor.newOutputStream(FileStore.META_INDEX)));
-      bufferedStatusSink.writeUtf8("");
-      bufferedStatusSink.flush();
-      bufferedStatusSink.close();
-
-      editor.commit();
       //---
     }
   }

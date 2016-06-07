@@ -1,4 +1,15 @@
 <resources>
-  <string name="app_name">sample</string>
+  <string name="app_name">Downlink Sample</string>
   <string name="action_settings">Settings</string>
+  <string name="status_not_available">Download status not available</string>
+  <string name="download_completed">Download completed</string>
+  <string name="download_failed">Download Failed</string>
+  <string name="download_progress">Download in progress</string>
+  <string name="download_queued">Download Queued</string>
+  <string name="download_canceled">Download canceled</string>
+  <string name="yes">YES</string>
+  <string name="no">NO</string>
+  <string name="download_suffix">"Download - "</string>
+  <string name="download_message">Should this item be downloaded now ?</string>
+  <string name="settings">Settings</string>
 </resources>

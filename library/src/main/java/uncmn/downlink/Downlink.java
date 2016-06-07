@@ -25,7 +25,7 @@ import okio.Okio;
  * Download manager.
  */
 public final class Downlink {
-  private static final int DEFAULT_CACHE_SIZE_IN_BYTES = 50 * 1024 * 1024;
+  private static final int DEFAULT_CACHE_SIZE_IN_BYTES = 250 * 1024 * 1024;
   private Logger logger = new Logger() {
     @Override public void log(String message) {
       //do nothing
@@ -240,6 +240,15 @@ public final class Downlink {
     private volatile boolean cancelDownload = false;
     private Call call;
 
+    /**
+     * Default constructor.
+     *
+     * @param fileKey File key.
+     * @param client Http client.
+     * @param url Url to download.
+     * @param fileStore File storage.
+     * @param listener Download listener.
+     */
     public DownloadWorker(String fileKey, OkHttpClient client, String url, FileStore fileStore,
         DownlinkListener listener) {
       //add download in progress
@@ -250,6 +259,9 @@ public final class Downlink {
       this.fileKey = fileKey;
     }
 
+    /**
+     * Cancel this download.
+     */
     public void cancelDownload() {
       if (!cancelDownload) {
         this.cancelDownload = true;
@@ -260,6 +272,9 @@ public final class Downlink {
       }
     }
 
+    /**
+     * Kick off download.
+     */
     public void download() {
       Request request = new Request.Builder().url(downloadUrl).build();
       DiskLruCache lruCache = fileStore.getDiskLruCache();

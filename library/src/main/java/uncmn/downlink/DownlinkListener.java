@@ -13,7 +13,7 @@ public interface DownlinkListener {
 
   /**
    * Notified when a url is queued for download.
-   * @param url
+   * @param url Url value.
    */
   void onQueued(String url);
 

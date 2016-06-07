@@ -29,9 +29,15 @@ public final class FileStore {
   };
   private DiskLruCache diskLruCache;
 
-  public FileStore(File cacheRootDir, long cacheSizeInBytes) {
-    this.cacheSizeInBytes = cacheSizeInBytes;
-    this.cacheRootDir = cacheRootDir;
+  /**
+   * Default constructor.
+   *
+   * @param rootDir Root directory.
+   * @param sizeInBytes Size of the file store.
+   */
+  public FileStore(File rootDir, long sizeInBytes) {
+    this.cacheSizeInBytes = sizeInBytes;
+    this.cacheRootDir = rootDir;
     init();
   }
 

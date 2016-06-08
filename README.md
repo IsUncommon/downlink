@@ -1,3 +1,5 @@
+[![](https://jitpack.io/v/isuncommon/downlink.svg)](https://jitpack.io/#isuncommon/downlink)
+
 Downlink is simple file download management utility that can be embedded into your android projects.
 
 ####Goals

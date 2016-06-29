@@ -94,10 +94,23 @@ public final class Downlink {
 
   /**
    * @param rootDir Root directory at which cache entries should be saved.
+   * @param maxSizeInBytes Maximum size of the directory in bytes.
    */
   private Downlink(String rootDir, long maxSizeInBytes) {
     this.rootDir = new File(rootDir);
     this.maxSizeInBytes = maxSizeInBytes;
+    init();
+  }
+
+  /**
+   * @param rootDir Root directory at which cache entries should be saved.
+   * @param maxSizeInBytes Maximum size of the directory in bytes.
+   * @param client Ok http client instance.
+   */
+  private Downlink(String rootDir, long maxSizeInBytes, OkHttpClient client) {
+    this.rootDir = new File(rootDir);
+    this.maxSizeInBytes = maxSizeInBytes;
+    this.httpClient = client;
     init();
   }
 
@@ -109,10 +122,12 @@ public final class Downlink {
             "Failed creating directory at path -- " + rootDir.getAbsolutePath());
       }
     }
-    httpClient = new OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .build();
+    if (httpClient == null) {
+      httpClient = new OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
+          .readTimeout(15, TimeUnit.SECONDS)
+          .writeTimeout(15, TimeUnit.SECONDS)
+          .build();
+    }
     this.fileStore = new FileStore(rootDir, maxSizeInBytes);
   }
 
@@ -128,6 +143,17 @@ public final class Downlink {
    */
   public static Downlink create(String rootDir, long maxSizeInBytes) {
     Downlink downlink = new Downlink(rootDir, maxSizeInBytes);
+    return downlink;
+  }
+
+  /**
+   * @param rootDir Directory to which downloads will happen.
+   * @param maxSizeInBytes Maximum size to occupy in disk in bytes.
+   * @param okHttpClient Okhttp client.
+   * @return Downlink instance.
+   */
+  public static Downlink create(String rootDir, long maxSizeInBytes, OkHttpClient okHttpClient) {
+    Downlink downlink = new Downlink(rootDir, maxSizeInBytes, okHttpClient);
     return downlink;
   }
 

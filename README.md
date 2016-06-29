@@ -99,15 +99,7 @@ try {
 Provided sample application details complete usage of Downlink.
 
 ###Misc
-Downlink is powered by okhttp, you can get hold okhttp client instance and provide your own interceptors.
-```
-downlink.httpClient().networkInterceptors().add(new Interceptor() {
-      @Override public Response intercept(Chain chain) throws IOException {
-        //do response decorations.
-        
-      }
-    });
-```
+Downlink is powered by okhttp, you can supply your own okhttp client during downlink creation.
 Clear or Reset to new size.
 ```
 //clear
